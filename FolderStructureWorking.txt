@@ -1,0 +1,105 @@
+invoxv2/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   └── register/
+│   │       └── page.tsx
+│   ├── (dashboard)/
+│   │   ├── dashboard/
+│   │   │   └── page.tsx
+│   │   ├── invoices/
+│   │   │   ├── new/
+│   │   │   │   └── page.tsx
+│   │   │   ├── [id]/
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx
+│   │   ├── logs/
+│   │   │   └── page.tsx
+│   │   ├── profile/
+│   │   │   └── page.tsx
+│   │   ├── settings/
+│   │   │   └── page.tsx
+│   │   └── layout.tsx
+│   ├── api/
+│   │   ├── auth/
+│   │   │   ├── challenge/
+│   │   │   │   └── route.ts
+│   │   │   ├── login/
+│   │   │   │   └── route.ts
+│   │   │   ├── logout/
+│   │   │   │   └── route.ts
+│   │   │   └── register/
+│   │   │       └── route.ts
+│   │   ├── invoices/
+│   │   │   ├── [id]/
+│   │   │   │   └── route.ts
+│   │   │   ├── sign/
+│   │   │   │   └── route.ts
+│   │   │   └── route.ts
+│   │   ├── logs/
+│   │   │   └── route.ts
+│   │   ├── pdf/
+│   │   │   └── [id]/
+│   │   │       └── route.ts
+│   │   ├── settings/
+│   │   │   └── route.ts
+│   │   └── user/
+│   │       └── profile/
+│   │           └── route.ts
+│   ├── error.tsx
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── not-found.tsx
+│   └── page.tsx
+├── components/
+│   ├── ui/
+│   │   ├── alert.tsx
+│   │   ├── badge.tsx
+│   │   ├── button.tsx
+│   │   ├── card.tsx
+│   │   ├── dialog.tsx
+│   │   ├── input.tsx
+│   │   ├── label.tsx
+│   │   ├── select.tsx
+│   │   ├── sonner.tsx
+│   │   ├── table.tsx
+│   │   ├── tabs.tsx
+│   │   └── toast.tsx
+│   ├── invoice-form.tsx
+│   ├── invoice-table.tsx
+│   └── sign-invoice-dialog.tsx
+├── hooks/
+│   └── use-toast.ts
+├── lib/
+│   ├── db.ts
+│   ├── utils.ts
+│   ├── webauthn-client.ts
+│   └── webauthn.ts
+├── models/
+│   ├── Invoice.ts
+│   ├── Log.ts
+│   ├── Session.ts
+│   ├── Setting.ts
+│   ├── Signature.ts
+│   └── User.ts
+├── public/
+│   ├── pdfs/
+│   │   └── taxInvoiceTemplate.ts
+│   └── logo.svg
+├── types/
+│   ├── global.d.ts
+│   └── index.ts
+├── utils/
+│   ├── logger.ts
+│   └── pdf.ts
+├── components.json
+├── Folder Structure.txt
+├── middleware.ts
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.js
+└── tsconfig.json
