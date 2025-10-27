@@ -55,7 +55,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className='shadow-sm'>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -66,7 +66,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className='shadow-sm'>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Draft Invoices</CardTitle>
             <FilePlus className="h-4 w-4 text-muted-foreground" />
@@ -77,7 +77,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className='shadow-sm'>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Signed Invoices</CardTitle>
             <FileCheck className="h-4 w-4 text-muted-foreground" />
@@ -88,7 +88,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className='shadow-sm'>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
@@ -102,7 +102,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className='shadow-sm'>
         <CardHeader>
           <CardTitle>Recent Invoices</CardTitle>
           <CardDescription>Your latest invoice activity</CardDescription>
@@ -117,7 +117,7 @@ export default function DashboardPage() {
               {stats.recent.map((invoice: any) => (
                 <div
                   key={invoice._id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center justify-between p-4 shadow-sm rounded-lg hover:bg-gray-50 cursor-pointer"
                   onClick={() => router.push(`/invoices/${invoice._id}`)}
                 >
                   <div>

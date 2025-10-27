@@ -28,27 +28,9 @@ export default function HomePage() {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center space-x-2">
-              <div className="rounded-lg bg-primary p-2">
-                <FileText className="h-6 w-6 text-white" />
-              </div>
               <span className="text-xl font-bold text-gray-900">Keyzotrick Intelligence</span>
             </div>
 
-            {/* Navigation Links */}
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-gray-600 hover:text-gray-900 transition">
-                Features
-              </a>
-              <a href="#security" className="text-gray-600 hover:text-gray-900 transition">
-                Security
-              </a>
-              <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition">
-                Pricing
-              </a>
-              <a href="#about" className="text-gray-600 hover:text-gray-900 transition">
-                About
-              </a>
-            </div>
 
             {/* Auth Buttons */}
             <div className="flex items-center gap-3">
@@ -88,7 +70,7 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
               <Link href="/register">
                 <Button size="lg" className="h-12 px-8 text-base">
-                  Start Free Trial
+                  Register
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
