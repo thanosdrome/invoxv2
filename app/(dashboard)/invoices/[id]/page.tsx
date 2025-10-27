@@ -1,5 +1,5 @@
-// ====================================
-// app/(dashboard)/invoices/[id]/page.tsx
+// app/(dashboard)/invoices/[id]/page.tsx - FIXED
+// Invoice Detail Page with Working PDF Download
 // ====================================
 'use client';
 
@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { authenticateWebAuthn } from '@/lib/webauthn-client';
-import { Download, FileSignature, Loader2, CheckCircle } from 'lucide-react';
+import { Download, FileSignature, Loader2, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function InvoiceDetailPage() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (params.id) {
@@ -31,11 +34,12 @@ export default function InvoiceDetailPage() {
       if (res.ok) {
         setInvoice(data.invoice);
       } else {
-        alert('Invoice not found');
-        router.push('/invoices');
+        setError(data.error || 'Invoice not found');
+        setTimeout(() => router.push('/invoices'), 2000);
       }
     } catch (error) {
       console.error('Failed to fetch invoice:', error);
+      setError('Failed to load invoice');
     } finally {
       setLoading(false);
     }
@@ -43,6 +47,7 @@ export default function InvoiceDetailPage() {
 
   const handleSign = async () => {
     setSigning(true);
+    setError('');
 
     try {
       // Step 1: Initiate signing
@@ -78,31 +83,68 @@ export default function InvoiceDetailPage() {
         throw new Error(verifyData.error || 'Signature verification failed');
       }
 
-      alert('Invoice signed successfully!');
-      fetchInvoice(); // Refresh invoice data
+      // Show success message
+      alert(verifyData.message || 'Invoice signed successfully!');
+      
+      // Refresh invoice data
+      await fetchInvoice();
     } catch (error: any) {
       console.error('Signing error:', error);
-      alert(error.message || 'Failed to sign invoice');
+      setError(error.message || 'Failed to sign invoice');
     } finally {
       setSigning(false);
     }
   };
 
   const handleDownloadPDF = async () => {
+    if (!invoice?.pdfUrl) {
+      alert('PDF is not available for this invoice');
+      return;
+    }
+
+    setDownloading(true);
+    setError('');
+
     try {
+      // Method 1: Try direct download via API
       const res = await fetch(`/api/pdf/${params.id}`);
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${invoice.invoiceNumber}.pdf`;
-        a.click();
-      } else {
-        alert('Failed to download PDF');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to download PDF');
       }
-    } catch (error) {
-      alert('Failed to download PDF');
+
+      // Get the PDF blob
+      const blob = await res.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      
+    } catch (error: any) {
+      console.error('Download error:', error);
+      
+      // Method 2: Fallback to direct URL access
+      try {
+        console.log('Trying fallback download method...');
+        window.open(invoice.pdfUrl, '_blank');
+      } catch (fallbackError) {
+        setError(error.message || 'Failed to download PDF');
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleViewPDF = () => {
+    if (invoice?.pdfUrl) {
+      // Open PDF in new tab
+      window.open(invoice.pdfUrl, '_blank');
     }
   };
 
@@ -114,24 +156,55 @@ export default function InvoiceDetailPage() {
     );
   }
 
+  if (error && !invoice) {
+    return (
+      <div className="text-center py-12 space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={() => router.push('/invoices')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Invoices
+        </Button>
+      </div>
+    );
+  }
+
   if (!invoice) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Invoice not found</p>
+        <Button onClick={() => router.push('/invoices')} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Invoices
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/invoices')}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </div>
           <h1 className="text-3xl font-bold text-gray-900">{invoice.invoiceNumber}</h1>
           <p className="text-gray-500 mt-1">
             Created on {new Date(invoice.createdAt).toLocaleDateString()}
           </p>
         </div>
-        <div className="flex gap-2">
+        
+        <div className="flex flex-wrap gap-2">
           {invoice.status === 'draft' && (
             <Button onClick={handleSign} disabled={signing}>
               {signing ? (
@@ -147,17 +220,47 @@ export default function InvoiceDetailPage() {
               )}
             </Button>
           )}
-          {invoice.status === 'signed' && (
-            <Button onClick={handleDownloadPDF}>
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
+          
+          {invoice.status === 'signed' && invoice.pdfUrl && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleViewPDF}
+              >
+                View PDF
+              </Button>
+              <Button
+                onClick={handleDownloadPDF}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Success Alert */}
       {invoice.status === 'signed' && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+        <Alert className="border-green-200 bg-green-50">
           <CheckCircle className="h-5 w-5 text-green-600" />
           <div>
             <p className="font-medium text-green-900">Invoice Signed</p>
@@ -165,10 +268,16 @@ export default function InvoiceDetailPage() {
               Signed by {invoice.signedBy?.name} on{' '}
               {new Date(invoice.signedAt).toLocaleString()}
             </p>
+            {invoice.pdfUrl && (
+              <p className="text-xs text-green-600 mt-1">
+                PDF available at: {invoice.pdfUrl}
+              </p>
+            )}
           </div>
-        </div>
+        </Alert>
       )}
 
+      {/* Client and Invoice Info */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -219,30 +328,48 @@ export default function InvoiceDetailPage() {
         </Card>
       </div>
 
+      {/* Line Items */}
       <Card>
         <CardHeader>
           <CardTitle>Line Items</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground pb-2 border-b">
+            {/* Header */}
+            <div className="hidden md:grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground pb-2 border-b">
               <div className="col-span-6">Description</div>
               <div className="col-span-2 text-right">Quantity</div>
               <div className="col-span-2 text-right">Rate</div>
               <div className="col-span-2 text-right">Total</div>
             </div>
+
+            {/* Items */}
             {invoice.lineItems.map((item: any, index: number) => (
-              <div key={index} className="grid grid-cols-12 gap-4 text-sm">
-                <div className="col-span-6">{item.description}</div>
-                <div className="col-span-2 text-right">{item.quantity}</div>
-                <div className="col-span-2 text-right">${item.rate.toFixed(2)}</div>
-                <div className="col-span-2 text-right font-medium">
+              <div
+                key={index}
+                className="grid grid-cols-1 md:grid-cols-12 gap-4 text-sm pb-4 border-b md:border-0"
+              >
+                <div className="md:col-span-6">
+                  <span className="md:hidden text-xs text-muted-foreground">Description: </span>
+                  {item.description}
+                </div>
+                <div className="md:col-span-2 md:text-right">
+                  <span className="md:hidden text-xs text-muted-foreground">Qty: </span>
+                  {item.quantity}
+                </div>
+                <div className="md:col-span-2 md:text-right">
+                  <span className="md:hidden text-xs text-muted-foreground">Rate: </span>
+                  ${item.rate.toFixed(2)}
+                </div>
+                <div className="md:col-span-2 md:text-right font-medium">
+                  <span className="md:hidden text-xs text-muted-foreground">Total: </span>
                   ${item.total.toFixed(2)}
                 </div>
               </div>
             ))}
           </div>
 
+          {/* Totals */}
           <div className="mt-6 pt-4 border-t space-y-2">
             <div className="flex justify-between text-sm">
               <span>Subtotal</span>
@@ -258,7 +385,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div className="flex justify-between text-lg font-bold pt-2 border-t">
               <span>Grand Total</span>
-              <span>${invoice.grandTotal.toFixed(2)}</span>
+              <span className="text-primary">${invoice.grandTotal.toFixed(2)}</span>
             </div>
           </div>
         </CardContent>

@@ -163,14 +163,7 @@ export async function generateInvoicePDF(
     y -= 15;
     page.drawText(`Signed At: ${signedAt.toLocaleString()}`, { x: 50, y, size: 9, font });
     y -= 15;
-    page.drawText('✓ Verified via WebAuthn (FIDO2)', {
-      x: 50,
-      y,
-      size: 9,
-      font,
-      color: rgb(0, 0.6, 0),
-    });
-    
+
     // Terms
     y -= 40;
     if (y < 100) {

@@ -21,22 +21,34 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
 ) {
+  
   try {
     await dbConnect();
     const user = getUserFromToken(req);
     const { id } = await params;
+    console.log('=== PDF Download Request ===');
+     console.log('Invoice ID:', id);
     // Get invoice
     console.log('Fetching invoice with ID for PDF:', id);
     const invoice = await Invoice.findById(id);
-    console.log(invoice);
+    console.log('Invoice found:', invoice ? 'yes' : 'no');
+    console.log('Invoice status:', invoice?.status);
+    console.log('PDF URL:', invoice?.pdfUrl);
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
     
     // Check if invoice is signed
-    if (invoice.status !== 'signed' || !invoice.pdfUrl) {
+    if (invoice.status !== 'signed') {
+      console.log('Invoice not signed');
       return NextResponse.json(
         { error: 'PDF not available. Invoice must be signed first.' }, 
+        { status: 400 }
+      );
+    }else if(!invoice.pdfUrl){
+       console.log('no PDF URL');
+      return NextResponse.json(
+        { error: 'PDF not available. No PDF URL.' }, 
         { status: 400 }
       );
     }

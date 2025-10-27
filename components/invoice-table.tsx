@@ -232,3 +232,15 @@ export default function InvoiceTable({
     </div>
   );
 }
+const handleDownloadSimple = (invoice: Invoice) => {
+  if (invoice.pdfUrl) {
+    // Method 1: Direct link (simplest)
+    const link = document.createElement('a');
+    link.href = invoice.pdfUrl;
+    link.download = `${invoice.invoiceNumber}.pdf`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
