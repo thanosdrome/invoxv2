@@ -9,7 +9,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('auth-token')?.value;
-  
+  if (request.nextUrl.pathname.startsWith('/pdfs/')) {
+    return NextResponse.next();
+  }
   // Protected API routes
   const protectedPaths = ['/api/invoices', '/api/logs', '/api/pdf'];
   const isProtected = protectedPaths.some(path => 

@@ -73,7 +73,7 @@ export default function HomePage() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 leading-tight">
               Secure Invoice Management
               <br />
-              <span className="bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-[#0070b2] to-[#0070b2] bg-clip-text text-transparent">
                 with Digital Signatures
               </span>
             </h1>

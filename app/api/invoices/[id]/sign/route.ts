@@ -69,7 +69,6 @@ function getClientIP(req: NextRequest): string {
   return (
     req.headers.get('x-forwarded-for')?.split(',')[0] ||
     req.headers.get('x-real-ip') ||
-    req.ip ||
     'unknown'
   );
 }
@@ -83,7 +82,7 @@ function getClientIP(req: NextRequest): string {
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
 ) {
   try {
     await dbConnect();
@@ -95,9 +94,9 @@ export async function POST(
     // Parse request body
     const body = await req.json();
     const { step } = body;
-    
+    const { id } = await params;
     // Validate invoice exists
-    const invoice = await Invoice.findById(params.id);
+    const invoice = await Invoice.findById(id);
     
     if (!invoice) {
       return NextResponse.json(
@@ -165,7 +164,7 @@ export async function POST(
       // Create signature record with pending status
       const signature = await Signature.create({
         userId: user.userId,
-        invoiceId: params.id,
+        invoiceId: id,
         webAuthnChallengeId: options.challenge,
         signatureText: `Digitally signed by ${userDoc.name}`,
         verified: false,
@@ -177,7 +176,7 @@ export async function POST(
         userId: user.userId,
         action: 'INVOICE_SIGN_INITIATED',
         entity: 'invoice',
-        entityId: params.id,
+        entityId: id,
         description: `Signing initiated for invoice: ${invoice.invoiceNumber}`,
         ipAddress,
       });
@@ -228,7 +227,7 @@ export async function POST(
         );
       }
       
-      if (signature.invoiceId.toString() !== params.id) {
+      if (signature.invoiceId.toString() !== id) {
         return NextResponse.json(
           { error: 'Signature does not match invoice' },
           { status: 400 }
@@ -284,7 +283,7 @@ export async function POST(
           userId: user.userId,
           action: 'INVOICE_SIGN_FAILED',
           entity: 'invoice',
-          entityId: params.id,
+          entityId: id,
           description: `WebAuthn verification failed for invoice: ${invoice.invoiceNumber}`,
           ipAddress,
         });
@@ -304,7 +303,7 @@ export async function POST(
           userId: user.userId,
           action: 'INVOICE_SIGN_FAILED',
           entity: 'invoice',
-          entityId: params.id,
+          entityId: id,
           description: `Signature verification failed for invoice: ${invoice.invoiceNumber}`,
           ipAddress,
         });
@@ -365,7 +364,7 @@ export async function POST(
           userId: user.userId,
           action: LogActions.PDF_GENERATED,
           entity: 'invoice',
-          entityId: params.id,
+          entityId: id,
           description: `PDF generated for invoice: ${invoice.invoiceNumber}`,
           ipAddress,
         });
@@ -377,7 +376,7 @@ export async function POST(
           userId: user.userId,
           action: 'PDF_GENERATION_FAILED',
           entity: 'invoice',
-          entityId: params.id,
+          entityId: id,
           description: `PDF generation failed for invoice: ${invoice.invoiceNumber} - ${pdfErrorMessage}`,
           ipAddress,
         });
@@ -391,13 +390,13 @@ export async function POST(
         userId: user.userId,
         action: LogActions.INVOICE_SIGNED,
         entity: 'invoice',
-        entityId: params.id,
+        entityId: id,
         description: `Invoice signed successfully: ${invoice.invoiceNumber}`,
         ipAddress,
       });
       
       // Populate user details for response
-            let populatedInvoice = await Invoice.findById(params.id)
+            let populatedInvoice = await Invoice.findById(id)
               .populate('createdBy', 'name email')
               .populate('signedBy', 'name email')
               .lean();
@@ -469,18 +468,18 @@ export async function POST(
 /**
  * GET - Get signature details for an invoice
  */
-export async function GET(
+export async function GET (
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
 ) {
   try {
     await dbConnect();
     
     // Authenticate user
     const user = getUserFromToken(req);
-    
+    const {id} = await params;
     // Get invoice with signature details
-    let invoice: any = await Invoice.findById(params.id)
+    let invoice: any = await Invoice.findById(id)
       .populate('signatureId')
       .populate('signedBy', 'name email')
       .lean();

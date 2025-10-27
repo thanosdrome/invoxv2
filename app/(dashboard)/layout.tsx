@@ -80,7 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Right side buttons */}
             <div className="flex items-center gap-2">
               {/* Desktop Logout */}
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden md:flex">
+              <Button variant="ghost" size="sm" onClick={() => handleLogout()} className="hidden md:flex">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </Button>

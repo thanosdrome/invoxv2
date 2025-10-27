@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       entity: 'invoice',
       entityId: invoice._id.toString(),
       description: `Invoice created: ${invoiceNumber}`,
-      ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+      ipAddress: req.headers.get('x-forwarded-for') || "unknown",
     });
     
     return NextResponse.json({ invoice }, { status: 201 });

@@ -1,16 +1,12 @@
 // ====================================
-// app/api/invoices/[id]/sign/route.ts
+// app/api/invoices/[id]/route.ts
 // ====================================
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 import dbConnect from '@/lib/db';
 import Invoice from '@/models/Invoice';
-import Signature from '@/models/Signature';
-import User from '@/models/User';
-import Setting from '@/models/Setting';
 import { createLog, LogActions } from '@/utils/logger';
-import { generateAuthenticationChallenge, verifyAuthentication } from '@/lib/webauthn';
-import { generateInvoicePDF, savePDF } from '@/utils/pdf';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -20,7 +16,40 @@ function getUserFromToken(req: NextRequest) {
   return jwt.verify(token, JWT_SECRET) as any;
 }
 
-export async function POST(
+// GET - Get single invoice
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
+) {
+  try {
+    await dbConnect();
+    const user = getUserFromToken(req);
+    
+    // Await the params promise first
+    const { id } = await params;
+    
+    const invoice = await Invoice.findById(id)
+      .populate('createdBy', 'name email')
+      .populate('signedBy', 'name email')
+      .lean() as any;
+    
+    console.log('Fetching invoice with ID:', id); // Use id instead of params.id
+    if (!invoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+    
+    if (user.role !== 'admin' && invoice.createdBy._id.toString() !== user.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
+    return NextResponse.json({ invoice });
+  } catch (error) {
+    return NextResponse.json({ error: error }, { status: 400 });
+  }
+}
+
+// PUT - Update invoice
+export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -28,7 +57,6 @@ export async function POST(
     await dbConnect();
     const user = getUserFromToken(req);
     const body = await req.json();
-    const { step } = body;
     
     const invoice = await Invoice.findById(params.id);
     if (!invoice) {
@@ -36,133 +64,68 @@ export async function POST(
     }
     
     if (invoice.status === 'signed') {
-      return NextResponse.json({ error: 'Invoice already signed' }, { status: 400 });
+      return NextResponse.json({ error: 'Cannot update signed invoice' }, { status: 400 });
     }
     
-    // Step 1: Generate signing challenge
-    if (step === 'init') {
-      const userDoc = await User.findById(user.userId);
-      if (!userDoc?.webAuthnCredential) {
-        return NextResponse.json({ error: 'WebAuthn not configured' }, { status: 400 });
-      }
-      
-      const options = await generateAuthenticationChallenge(user.userId);
-      
-      // Create signature record with challenge
-      const signature = await Signature.create({
-        userId: user.userId,
-        invoiceId: params.id,
-        webAuthnChallengeId: options.challenge,
-        signatureText: `Signed by ${userDoc.name}`,
-        verified: false,
-      });
-      
-      return NextResponse.json({
-        signatureId: signature._id,
-        options,
-        credentialId: userDoc.webAuthnCredential.credentialID,
-      });
+    if (user.role !== 'admin' && invoice.createdBy.toString() !== user.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    // Step 2: Verify signature and complete signing
-    if (step === 'verify') {
-      const { signatureId, credential } = body;
-      
-      const signature = await Signature.findById(signatureId);
-      if (!signature) {
-        return NextResponse.json({ error: 'Signature not found' }, { status: 404 });
-      }
-      
-      const userDoc = await User.findById(user.userId);
-      if (!userDoc?.webAuthnCredential) {
-        return NextResponse.json({ error: 'WebAuthn not configured' }, { status: 400 });
-      }
-      
-      const credentialPublicKey = Buffer.from(userDoc.webAuthnCredential.credentialPublicKey, 'base64');
-      const credentialID = Buffer.from(userDoc.webAuthnCredential.credentialID, 'base64');
-      
-      const verification = await verifyAuthentication(
-        user.userId,
-        credential,
-        credentialPublicKey,
-        credentialID,
-        userDoc.webAuthnCredential.counter
-      );
-      
-      if (!verification.verified) {
-        return NextResponse.json({ error: 'Signature verification failed' }, { status: 401 });
-      }
-      
-      // Update counter
-      await User.findByIdAndUpdate(user.userId, {
-        'webAuthnCredential.counter': verification.authenticationInfo.newCounter,
-      });
-      
-      // Mark signature as verified
-      signature.verified = true;
-      signature.verifiedAt = new Date();
-      await signature.save();
-      
-      // Update invoice
-      invoice.status = 'signed';
-      invoice.signedBy = user.userId;
-      invoice.signedAt = new Date();
-      invoice.signatureId = signature._id;
-      
-      // Generate PDF
-      const settings = await Setting.findOne() || {
-        companyName: 'Your Company',
-        companyAddress: '123 Business St',
-        companyEmail: 'contact@company.com',
-        companyPhone: '555-0000',
-        termsText: 'Payment due within 30 days.',
-      };
-      
-      const pdfBuffer = await generateInvoicePDF(
-        invoice,
-        settings,
-        userDoc.name,
-        invoice.signedAt
-      );
-      
-      const pdfUrl = await savePDF(pdfBuffer, invoice.invoiceNumber);
-      invoice.pdfUrl = pdfUrl;
-      
-      await invoice.save();
-      
-      await createLog({
-        userId: user.userId,
-        action: LogActions.INVOICE_SIGNED,
-        entity: 'invoice',
-        entityId: params.id,
-        description: `Invoice signed: ${invoice.invoiceNumber}`,
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
-      });
-      
-      await createLog({
-        userId: user.userId,
-        action: LogActions.PDF_GENERATED,
-        entity: 'invoice',
-        entityId: params.id,
-        description: `PDF generated for invoice: ${invoice.invoiceNumber}`,
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
-      });
-      
-      return NextResponse.json({
-        success: true,
-        invoice: {
-          id: invoice._id,
-          invoiceNumber: invoice.invoiceNumber,
-          status: invoice.status,
-          pdfUrl: invoice.pdfUrl,
-          signedAt: invoice.signedAt,
-        },
-      });
+    // Recalculate totals if lineItems changed
+    if (body.lineItems) {
+      const subtotal = body.lineItems.reduce((sum: any, item: { total: any; }) => sum + item.total, 0);
+      body.subtotal = subtotal;
+      body.grandTotal = subtotal + (body.tax || 0) - (body.discount || 0);
     }
     
-    return NextResponse.json({ error: 'Invalid step' }, { status: 400 });
+    const updated = await Invoice.findByIdAndUpdate(params.id, body, { new: true });
+    
+    await createLog({
+      userId: user.userId,
+      action: LogActions.INVOICE_UPDATED,
+      entity: 'invoice',
+      entityId: params.id,
+      description: `Invoice updated: ${updated.invoiceNumber}`,
+      ipAddress: req.headers.get('x-forwarded-for') || "unknown",
+    });
+    
+    return NextResponse.json({ invoice: updated });
   } catch (error) {
-    console.error('Sign invoice error:', error);
     return NextResponse.json({ error }, { status: 400 });
+  }
+}
+
+// DELETE - Delete invoice
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await dbConnect();
+    const user = getUserFromToken(req);
+    
+    const invoice = await Invoice.findById(params.id);
+    if (!invoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+    
+    if (user.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
+    await Invoice.findByIdAndDelete(params.id);
+    
+    await createLog({
+      userId: user.userId,
+      action: LogActions.INVOICE_DELETED,
+      entity: 'invoice',
+      entityId: params.id,
+      description: `Invoice deleted: ${invoice.invoiceNumber}`,
+      ipAddress: req.headers.get('x-forwarded-for') || "unknown",
+    });
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error}, { status: 400 });
   }
 }

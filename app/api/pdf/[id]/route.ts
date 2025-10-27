@@ -1,12 +1,13 @@
 // ====================================
-// app/api/pdf/[id]/route.ts
+// app/api/pdf/[id]/route.ts - FIXED VERSION
+// PDF Download Endpoint
 // ====================================
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/db';
 import Invoice from '@/models/Invoice';
-import fs from 'fs/promises';
 import path from 'path';
+import fs from 'fs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -18,37 +19,77 @@ function getUserFromToken(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
 ) {
   try {
     await dbConnect();
     const user = getUserFromToken(req);
-    
-    const invoice = await Invoice.findById(params.id);
+    const { id } = await params;
+    // Get invoice
+    console.log('Fetching invoice with ID for PDF:', id);
+    const invoice = await Invoice.findById(id);
+    console.log(invoice);
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
     
+    // Check if invoice is signed
     if (invoice.status !== 'signed' || !invoice.pdfUrl) {
-      return NextResponse.json({ error: 'PDF not available' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'PDF not available. Invoice must be signed first.' }, 
+        { status: 400 }
+      );
     }
     
+    // Check permissions
     if (user.role !== 'admin' && invoice.createdBy.toString() !== user.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
+    // Build file path
     const pdfPath = path.join(process.cwd(), 'public', invoice.pdfUrl);
-    const pdfBuffer = await fs.readFile(pdfPath);
     
+    console.log('Attempting to read PDF from:', pdfPath);
+    
+    // Check if file exists
+    if (!fs.existsSync(pdfPath)) {
+      console.error('PDF file not found at path:', pdfPath);
+      return NextResponse.json(
+        { 
+          error: 'PDF file not found on server',
+          path: invoice.pdfUrl,
+          message: 'The PDF may not have been generated correctly. Please try signing the invoice again.'
+        }, 
+        { status: 404 }
+      );
+    }
+    
+    // Read file
+    const pdfBuffer = fs.readFileSync(pdfPath);
+    console.log('PDF read successfully, size:', pdfBuffer.length, 'bytes');
+    
+    // Return PDF
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${invoice.invoiceNumber}.pdf"`,
+        'Content-Length': pdfBuffer.length.toString(),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get PDF error:', error);
-    return NextResponse.json({ error }, { status: 400 });
+    
+    if (error.message?.includes('Unauthorized')) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    
+    return NextResponse.json(
+      { 
+        error: 'Failed to retrieve PDF',
+        message: error.message 
+      }, 
+      { status: 500 }
+    );
   }
 }
