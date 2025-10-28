@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { z } from 'zod';
+import { unknown, z } from 'zod';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import { createLog, LogActions } from '@/utils/logger';
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           action: LogActions.LOGIN_FAILED,
           entity: 'user',
           description: `Login failed: ${email}`,
-          ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+          ipAddress: req.headers.get('x-forwarded-for') || "unknown",
         });
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
       }
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           entity: 'user',
           entityId: user._id.toString(),
           description: 'WebAuthn verification failed',
-          ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+          ipAddress: req.headers.get('x-forwarded-for') || "unknown",
         });
         return NextResponse.json({ error: 'Verification failed' }, { status: 401 });
       }
@@ -89,40 +89,41 @@ export async function POST(req: NextRequest) {
         'webAuthnCredential.counter': verification.authenticationInfo.newCounter,
       });
       
-      // Create JWT token
-      const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-      
+       const token = jwt.sign(
+    { userId: user._id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+    );
+    
+    const response = NextResponse.json({
+      success: true,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+    });
+    
       await createLog({
         userId: user._id.toString(),
         action: LogActions.LOGIN_SUCCESS,
         entity: 'user',
         entityId: user._id.toString(),
         description: `User logged in: ${user.email}`,
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+        ipAddress: req.headers.get('x-forwarded-for') || "unknown",
       });
       
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      });
-      
+        // IMPORTANT: Check these cookie settings
       response.cookies.set('auth-token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60,
-        path: '/', // ensure cookie is sent to all site routes (not only the API path)
+        secure: process.env.NODE_ENV === 'production', // false in development!
+        sameSite: 'lax', // Changed from 'strict' to 'lax'
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: '/', // IMPORTANT: Must be '/'
       });
       
+      console.log('✓ Login successful, cookie set:', {
+        token: token.substring(0, 20) + '...',
+        maxAge: 7 * 24 * 60 * 60,
+        path: '/',
+      });
+          
       return response;
     }
     

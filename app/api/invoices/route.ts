@@ -44,6 +44,12 @@ function getUserFromToken(req: NextRequest) {
 
 // GET - List invoices
 export async function GET(req: NextRequest) {
+  // Get user info from middleware-injected headers
+  const userId = req.headers.get('x-user-id');
+  const userRole = req.headers.get('x-user-role');
+  const userEmail = req.headers.get('x-user-email');
+  
+  console.log('User from middleware:', { userId, userRole, userEmail });
   try {
     await dbConnect();
     

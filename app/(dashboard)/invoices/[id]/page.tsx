@@ -136,8 +136,8 @@ export default function InvoiceDetailPageWithActions() {
               <Button variant="outline" onClick={() => window.open(invoice.pdfUrl, '_blank')}>
                 View PDF
               </Button>
-              <Button onClick={() => {/* handleDownloadPDF */}}>
-                <Download className="h-4 w-4 mr-2" />
+              <Button variant="outline" onClick={() => {/* handleDownloadPDF */}}>
+                <Download className="h-4 w-4 mr-2"  />
                 Download PDF
               </Button>
             </>
@@ -180,8 +180,119 @@ export default function InvoiceDetailPageWithActions() {
         </Alert>
       )}
 
-      {/* Rest of invoice details... */}
-      {/* ... (keep existing invoice display code) ... */}
+      {/* Client and Invoice Info */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Client Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Name</p>
+              <p className="font-medium">{invoice.clientName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Email</p>
+              <p className="font-medium">{invoice.clientEmail}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Address</p>
+              <p className="font-medium">{invoice.clientAddress}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Status</p>
+              <span
+                className={`inline-block px-2 py-1 text-xs rounded mt-1 ${
+                  invoice.status === 'signed'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}
+              >
+                {invoice.status}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Created By</p>
+              <p className="font-medium">{invoice.createdBy?.name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Invoice Number</p>
+              <p className="font-medium">{invoice.invoiceNumber}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Line Items */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Line Items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="hidden md:grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground pb-2 border-b">
+              <div className="col-span-6">Description</div>
+              <div className="col-span-2 text-right">Quantity</div>
+              <div className="col-span-2 text-right">Rate</div>
+              <div className="col-span-2 text-right">Total</div>
+            </div>
+
+            {/* Items */}
+            {invoice.lineItems.map((item: any, index: number) => (
+              <div
+                key={index}
+                className="grid grid-cols-1 md:grid-cols-12 gap-4 text-sm pb-4 border-b md:border-0"
+              >
+                <div className="md:col-span-6">
+                  <span className="md:hidden text-xs text-muted-foreground">Description: </span>
+                  {item.description}
+                </div>
+                <div className="md:col-span-2 md:text-right">
+                  <span className="md:hidden text-xs text-muted-foreground">Qty: </span>
+                  {item.quantity}
+                </div>
+                <div className="md:col-span-2 md:text-right">
+                  <span className="md:hidden text-xs text-muted-foreground">Rate: </span>
+                  ${item.rate.toFixed(2)}
+                </div>
+                <div className="md:col-span-2 md:text-right font-medium">
+                  <span className="md:hidden text-xs text-muted-foreground">Total: </span>
+                  ${item.total.toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          <div className="mt-6 pt-4 border-t space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal</span>
+              <span>${invoice.subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Tax</span>
+              <span>${invoice.tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Discount</span>
+              <span>-${invoice.discount.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold pt-2 border-t">
+              <span>Grand Total</span>
+              <span className="text-primary">${invoice.grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Delete Dialog */}
       <DeleteInvoiceDialog
