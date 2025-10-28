@@ -23,10 +23,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleLogout = async () => {
+const handleLogout = async () => {
+  try {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include', // Important: ensures cookies are sent
+    });
+    
+    if (response.ok) {
+      router.push('/login');
+    } else {
+      // Still redirect even if API fails, cookie might be cleared
+      console.error('Logout API failed');
+      router.push('/login');
+    }
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Fallback: clear cookie manually and redirect
     document.cookie = 'auth-token=; Max-Age=0; path=/;';
     router.push('/login');
-  };
+  }
+};
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
@@ -98,7 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          {/* Mobile Navigation */}
+          {/* Mobile Navigation 
           {mobileMenuOpen && (
             <div className="md:hidden border-t border-gray-200 py-3 space-y-1">
               {navLinks.map((link) => {
@@ -119,15 +136,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </a>
                 );
               })}
-              <button
+              <Button
                 onClick={handleLogout}
                 className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               >
                 <LogOut className="h-5 w-5 mr-3" />
                 Logout
-              </button>
+              </Button>
             </div>
-          )}
+          )}*/}
         </div>
       </nav>
 

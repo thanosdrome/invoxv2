@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           action: LogActions.LOGIN_FAILED,
           entity: 'user',
           description: `Login failed: ${email}`,
-          ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+          ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
         });
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
       }
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           entity: 'user',
           entityId: user._id.toString(),
           description: 'WebAuthn verification failed',
-          ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+          ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
         });
         return NextResponse.json({ error: 'Verification failed' }, { status: 401 });
       }
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         entity: 'user',
         entityId: user._id.toString(),
         description: `User logged in: ${user.email}`,
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
       });
       
       const response = NextResponse.json({

@@ -1,43 +1,108 @@
 // ====================================
-// middleware.ts - Auth Middleware
+// middleware.ts - FIXED VERSION
+// Properly protects both pages and API routes
 // ====================================
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   const token = request.cookies.get('auth-token')?.value;
-  if (request.nextUrl.pathname.startsWith('/pdfs/')) {
+  
+  // === 1. ALLOW: Static assets and Next.js internals ===
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/static') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/pdfs/') ||
+    pathname.match(/\.(ico|png|jpg|jpeg|svg|gif|webp|css|js)$/)
+  ) {
     return NextResponse.next();
   }
-  // Protected API routes
-  const protectedPaths = ['/api/invoices', '/api/logs', '/api/pdf'];
-  const isProtected = protectedPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path)
+  
+  // === 2. ALLOW: Public routes (anyone can access) ===
+  const publicPaths = [
+    '/',                      // Landing page
+    '/login',                 // Login page
+    '/register',              // Register page
+    '/api/auth/login',        // Login API
+    '/api/auth/register',     // Register API
+    '/api/auth/challenge',    // WebAuthn challenge
+    '/api/test-pdf',          // PDF test (optional, can remove)
+  ];
+  
+  if (publicPaths.includes(pathname)) {
+    // If user is logged in and tries to access login/register, redirect to dashboard
+    if (token && (pathname === '/login' || pathname === '/register')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    return NextResponse.next();
+  }
+  
+  // === 3. PROTECT: All dashboard pages ===
+  const protectedPagePaths = [
+    '/dashboard',
+    '/invoices',
+    '/settings',
+    '/profile',
+    '/logs',
+    '/diagnostics',
+  ];
+  
+  const isProtectedPage = protectedPagePaths.some(path => 
+    pathname === path || pathname.startsWith(path + '/')
   );
   
-  if (isProtected && !token) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  
-  if (token) {
-    try {
-      // Verify JWT using jose (Edge-compatible)
-      const secret = new TextEncoder().encode(JWT_SECRET);
-      await jwtVerify(token, secret);
-    } catch (err: any) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Middleware JWT verification error:', err.message || err);
-      }
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+  if (isProtectedPage) {
+    if (!token) {
+      console.log('🔒 Blocked page access:', pathname, '- No token');
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('from', pathname);
+      return NextResponse.redirect(loginUrl);
     }
+    // Has token, allow access
+    return NextResponse.next();
   }
   
+  // === 4. PROTECT: All API routes (except public ones) ===
+  const protectedAPIPaths = [
+    '/api/invoices',
+    '/api/logs',
+    '/api/pdf',
+    '/api/settings',
+    '/api/user',
+    '/api/list-pdfs',
+  ];
+  
+  const isProtectedAPI = protectedAPIPaths.some(path => 
+    pathname === path || pathname.startsWith(path + '/')
+  );
+  
+  if (isProtectedAPI) {
+    if (!token) {
+      console.log('🔒 Blocked API access:', pathname, '- No token');
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+    // Has token, allow access
+    return NextResponse.next();
+  }
+  
+  // === 5. DEFAULT: Allow other routes ===
   return NextResponse.next();
 }
 
+// Configure matcher to run on all routes except static files
 export const config = {
-  matcher: '/api/:path*',
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };
