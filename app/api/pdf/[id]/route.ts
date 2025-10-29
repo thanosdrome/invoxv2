@@ -26,14 +26,7 @@ export async function GET(
     await dbConnect();
     const user = getUserFromToken(req);
     const { id } = await params;
-    console.log('=== PDF Download Request ===');
-     console.log('Invoice ID:', id);
-    // Get invoice
-    console.log('Fetching invoice with ID for PDF:', id);
     const invoice = await Invoice.findById(id);
-    console.log('Invoice found:', invoice ? 'yes' : 'no');
-    console.log('Invoice status:', invoice?.status);
-    console.log('PDF URL:', invoice?.pdfUrl);
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
