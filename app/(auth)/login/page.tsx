@@ -4,8 +4,8 @@
 // ====================================
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ type LoginStep = 'email' | 'webauthn' | 'success' | 'error';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -118,6 +119,24 @@ export default function LoginPage() {
     setError('');
     setEmail('');
   };
+
+  // Clear stale/invalid cookie when middleware redirected with ?clear=1
+  useEffect(() => {
+    try {
+      const shouldClear = searchParams?.get('clear') === '1';
+      if (shouldClear) {
+        // call logout endpoint to ensure cookie is cleared server-side
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+          .then(() => {
+            // optionally we could show a notice to the user, but keep it silent
+            console.log('Cleared stale auth cookie');
+          })
+          .catch((err) => console.error('Failed to clear cookie:', err));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4">

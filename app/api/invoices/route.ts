@@ -1,44 +1,118 @@
-// ====================================
-// app/api/invoices/route.ts
+// app/api/invoices/route.ts - UPDATED
+// Create Invoice with GST Features
 // ====================================
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import dbConnect from '@/lib/db';
 import Invoice from '@/models/Invoice';
-import Setting from '@/models/Setting';
 import { createLog, LogActions } from '@/utils/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const lineItemSchema = z.object({
   description: z.string(),
+  hsnCode: z.string(),
   quantity: z.number().positive(),
   rate: z.number().positive(),
   total: z.number(),
 });
 
 const createInvoiceSchema = z.object({
+  invoiceNumber: z.string().min(1),
+  orderReferenceNumber: z.string().optional(),
   clientName: z.string().min(2),
   clientEmail: z.string().email(),
   clientAddress: z.string().min(5),
+  clientGSTNumber: z.string().length(15).optional().or(z.literal('')),
   lineItems: z.array(lineItemSchema).min(1),
-  tax: z.number().optional(),
+  taxType: z.enum(['IGST', 'CGST_SGST']),
   discount: z.number().optional(),
 });
 
 function getUserFromToken(req: NextRequest) {
   const token = req.cookies.get('auth-token')?.value;
-  if (!token) throw new Error('Unauthorized: no token');
+  if (!token) throw new Error('Unauthorized');
+  
+  const decoded = jwt.verify(token, JWT_SECRET) as any;
+  return decoded;
+}
 
+// POST - Create invoice
+export async function POST(req: NextRequest) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    return decoded;
-  } catch (err: any) {
-    // Provide clearer error during development and log masked token
-    const masked = token ? token.slice(0, 8) + '...' : 'no-token';
-    console.error(`JWT verification failed for token=${masked}:`, err?.message || err);
-    throw new Error('Invalid token');
+    await dbConnect();
+    
+    const user = getUserFromToken(req);
+    const body = await req.json();
+    const data = createInvoiceSchema.parse(body);
+    
+    // Check if invoice number already exists
+    const existing = await Invoice.findOne({ invoiceNumber: data.invoiceNumber });
+    if (existing) {
+      return NextResponse.json(
+        { error: 'Invoice number already exists. Please use a unique invoice number.' },
+        { status: 400 }
+      );
+    }
+    
+    // Calculate totals
+    const subtotal = data.lineItems.reduce((sum, item) => sum + item.total, 0);
+    
+    // Calculate tax based on type
+    let igst = 0, cgst = 0, sgst = 0, totalTax = 0;
+    
+    if (data.taxType === 'IGST') {
+      igst = subtotal * 0.18; // 18% IGST
+      totalTax = igst;
+    } else {
+      cgst = subtotal * 0.09; // 9% CGST
+      sgst = subtotal * 0.09; // 9% SGST
+      totalTax = cgst + sgst;
+    }
+    
+    const discount = data.discount || 0;
+    const grandTotal = subtotal + totalTax - discount;
+    
+    const invoice = await Invoice.create({
+      invoiceNumber: data.invoiceNumber,
+      orderReferenceNumber: data.orderReferenceNumber,
+      createdBy: user.userId,
+      clientName: data.clientName,
+      clientEmail: data.clientEmail,
+      clientAddress: data.clientAddress,
+      clientGSTNumber: data.clientGSTNumber,
+      lineItems: data.lineItems,
+      subtotal,
+      taxType: data.taxType,
+      igst,
+      cgst,
+      sgst,
+      totalTax,
+      discount,
+      grandTotal,
+      status: 'draft',
+    });
+    
+    await createLog({
+      userId: user.userId,
+      action: LogActions.INVOICE_CREATED,
+      entity: 'invoice',
+      entityId: invoice._id.toString(),
+      description: `Invoice created: ${data.invoiceNumber}`,
+      ipAddress: req.headers.get('x-forwarded-for') || "unknown",
+    });
+    
+    return NextResponse.json({ invoice }, { status: 201 });
+  } catch (error: any) {
+    console.error('Create invoice error:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid input', details: error.errors },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
 
@@ -72,54 +146,3 @@ export async function GET(req: NextRequest) {
     }
   }
 
-// POST - Create invoice
-export async function POST(req: NextRequest) {
-  try {
-    await dbConnect();
-    
-    const user = getUserFromToken(req);
-    const body = await req.json();
-    const data = createInvoiceSchema.parse(body);
-    
-    // Calculate totals
-    const subtotal = data.lineItems.reduce((sum, item) => sum + item.total, 0);
-    const tax = data.tax || 0;
-    const discount = data.discount || 0;
-    const grandTotal = subtotal + tax - discount;
-    
-    // Generate invoice number
-    const settings = await Setting.findOne() || {
-      invoicePrefix: 'INV',
-    };
-    
-    const count = await Invoice.countDocuments();
-    const invoiceNumber = `${settings.invoicePrefix}-${String(count + 1).padStart(6, '0')}`;
-    
-    const invoice = await Invoice.create({
-      invoiceNumber,
-      createdBy: user.userId,
-      clientName: data.clientName,
-      clientEmail: data.clientEmail,
-      clientAddress: data.clientAddress,
-      lineItems: data.lineItems,
-      subtotal,
-      tax,
-      discount,
-      grandTotal,
-      status: 'draft',
-    });
-    
-    await createLog({
-      userId: user.userId,
-      action: LogActions.INVOICE_CREATED,
-      entity: 'invoice',
-      entityId: invoice._id.toString(),
-      description: `Invoice created: ${invoiceNumber}`,
-      ipAddress: req.headers.get('x-forwarded-for') || "unknown",
-    });
-    
-    return NextResponse.json({ invoice }, { status: 201 });
-  } catch (error: any) {
-    console.error('Create invoice error:', error);
-    return NextResponse.json({ error }, { status: 400 });
-  } }

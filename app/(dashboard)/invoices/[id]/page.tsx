@@ -21,12 +21,16 @@ import {
   Trash2,
   MoreVertical,
 } from 'lucide-react';
+import { authenticateWebAuthn } from '@/lib/webauthn-client';
 
 export default function InvoiceDetailPageWithActions() {
   const router = useRouter();
   const params = useParams();
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [signing, setSigning] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>('user');
 
@@ -41,17 +45,123 @@ export default function InvoiceDetailPageWithActions() {
     try {
       const res = await fetch(`/api/invoices/${params.id}`);
       const data = await res.json();
-      
+
       if (res.ok) {
         setInvoice(data.invoice);
+      } else {
+        setError(data.error || 'Invoice not found');
+        setTimeout(() => router.push('/invoices'), 2000);
       }
     } catch (error) {
       console.error('Failed to fetch invoice:', error);
+      setError('Failed to load invoice');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSign = async () => {
+    setSigning(true);
+    setError('');
+
+    try {
+      // Step 1: Initiate signing
+      const initRes = await fetch(`/api/invoices/${params.id}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'init' }),
+      });
+
+      const initData = await initRes.json();
+
+      if (!initRes.ok) {
+        throw new Error(initData.error || 'Failed to initiate signing');
+      }
+
+      // Step 2: WebAuthn authentication
+      const credential = await authenticateWebAuthn(initData.options);
+
+      // Step 3: Verify and complete signing
+      const verifyRes = await fetch(`/api/invoices/${params.id}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 'verify',
+          signatureId: initData.signatureId,
+          credential,
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.error || 'Signature verification failed');
+      }
+
+      // Show success message
+      alert(verifyData.message || 'Invoice signed successfully!');
+      
+      // Refresh invoice data
+      await fetchInvoice();
+    } catch (error: any) {
+      console.error('Signing error:', error);
+      setError(error.message || 'Failed to sign invoice');
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!invoice?.pdfUrl) {
+      alert('PDF is not available for this invoice');
+      return;
+    }
+
+    setDownloading(true);
+    setError('');
+
+    try {
+      // Method 1: Try direct download via API
+      const res = await fetch(`/api/pdf/${params.id}`);
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to download PDF');
+      }
+
+      // Get the PDF blob
+      const blob = await res.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      
+    } catch (error: any) {
+      console.error('Download error:', error);
+      
+      // Method 2: Fallback to direct URL access
+      try {
+        console.log('Trying fallback download method...');
+        window.open(invoice.pdfUrl, '_blank');
+      } catch (fallbackError) {
+        setError(error.message || 'Failed to download PDF');
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleViewPDF = () => {
+    if (invoice?.pdfUrl) {
+      // Open PDF in new tab
+      window.open(invoice.pdfUrl, '_blank');
+    }
+  };
   const checkUserRole = async () => {
     try {
       const res = await fetch('/api/user/profile');
@@ -84,10 +194,20 @@ export default function InvoiceDetailPageWithActions() {
     );
   }
 
-  if (!invoice) {
-    return <div className="text-center py-12">Invoice not found</div>;
+  if (error && !invoice) {
+    return (
+      <div className="text-center py-12 space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={() => router.push('/invoices')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Invoices
+        </Button>
+      </div>
+    );
   }
-
   const canEdit = invoice.status === 'draft';
   const canDelete = userRole === 'admin';
 
@@ -124,7 +244,7 @@ export default function InvoiceDetailPageWithActions() {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
-              <Button onClick={() => {/* handleSign */}}>
+              <Button variant={'outline'} onClick={handleSign}>
                 <FileSignature className="h-4 w-4 mr-2" />
                 Sign Invoice
               </Button>
@@ -136,7 +256,7 @@ export default function InvoiceDetailPageWithActions() {
               <Button variant="outline" onClick={() => window.open(invoice.pdfUrl, '_blank')}>
                 View PDF
               </Button>
-              <Button onClick={() => {/* handleDownloadPDF */}}>
+              <Button onClick={handleDownloadPDF}>
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
@@ -144,11 +264,8 @@ export default function InvoiceDetailPageWithActions() {
           )}
 
           {/* More Actions Menu */}
-          {(canEdit || canDelete) && (<>
-            <Button onClick={handleEdit}  variant="outline">
-              Edit Invoice
-            </Button>
-          
+          {(canDelete) && (
+            <>
             <Button onClick={handleDelete}  variant="outline">
               Delete Invoice
             </Button>
@@ -280,7 +397,7 @@ export default function InvoiceDetailPageWithActions() {
             </div>
             <div className="flex justify-between text-sm">
               <span>Tax</span>
-              <span>${invoice.tax.toFixed(2)}</span>
+              <span>${invoice.totalTax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Discount</span>

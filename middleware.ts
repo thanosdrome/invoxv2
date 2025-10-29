@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('auth-token')?.value;
   
@@ -29,12 +29,22 @@ export function middleware(request: NextRequest) {
     '/api/auth/register',     // Register API
     '/api/auth/challenge',    // WebAuthn challenge
     '/api/test-pdf',          // PDF test (optional, can remove)
+    '/api/auth/validate',     // Token validation endpoint used by middleware
   ];
   
   if (publicPaths.includes(pathname)) {
-    // If user is logged in and tries to access login/register, redirect to dashboard
+    // If user has a token and visits login/register, validate token and redirect to dashboard if valid
     if (token && (pathname === '/login' || pathname === '/register')) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      try {
+        const validateUrl = new URL('/api/auth/validate', request.url).toString();
+        const resp = await fetch(validateUrl, { headers: { cookie: request.headers.get('cookie') || '' } });
+        if (resp.ok) {
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+        // invalid token — fall through and allow login page to render; login page will clear cookie if requested
+      } catch (e) {
+        // network or other error — allow login to proceed
+      }
     }
     return NextResponse.next();
   }
@@ -60,7 +70,35 @@ export function middleware(request: NextRequest) {
       loginUrl.searchParams.set('from', pathname);
       return NextResponse.redirect(loginUrl);
     }
-    // Has token, allow access
+
+    // Validate token by calling internal validation endpoint (this runs server-side)
+    try {
+      const validateUrl = new URL('/api/auth/validate', request.url).toString();
+      const resp = await fetch(validateUrl, { headers: { cookie: request.headers.get('cookie') || '' } });
+      if (!resp.ok) {
+        console.log('🔒 Invalid token for page access, redirecting to login:', pathname);
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('clear', '1');
+        loginUrl.searchParams.set('from', pathname);
+
+        // If the validation endpoint set a cookie (for example to clear the stale auth-token),
+        // forward that Set-Cookie header into the redirect response so the browser receives it
+        const setCookie = resp.headers.get('set-cookie');
+        const redirectRes = NextResponse.redirect(loginUrl);
+        if (setCookie) {
+          // Attach the Set-Cookie header to the redirect response
+          redirectRes.headers.set('set-cookie', setCookie);
+        }
+        return redirectRes;
+      }
+    } catch (err) {
+      console.error('Token validation request failed:', err);
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('from', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Valid token
     return NextResponse.next();
   }
   
@@ -86,7 +124,29 @@ export function middleware(request: NextRequest) {
         { status: 401 }
       );
     }
-    // Has token, allow access
+
+    // Validate token for API access
+    try {
+      const validateUrl = new URL('/api/auth/validate', request.url).toString();
+      const resp = await fetch(validateUrl, { headers: { cookie: request.headers.get('cookie') || '' } });
+      if (!resp.ok) {
+        console.log('🔒 Invalid token for API access:', pathname);
+        const res = NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        // clear cookie server-side so clients don't keep sending it
+        res.cookies.set('auth-token', '', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 0,
+        });
+        return res;
+      }
+    } catch (err) {
+      console.error('Token validation request failed for API:', err);
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     return NextResponse.next();
   }
   

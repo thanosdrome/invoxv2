@@ -14,7 +14,7 @@ import Setting from '@/models/Setting';
 import { createLog, LogActions } from '@/utils/logger';
 import { generateAuthenticationChallenge, verifyAuthentication } from '@/lib/webauthn';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
-import { generateInvoicePDF, savePDF } from '@/utils/pdf';
+import { generateInvoicePDFWithGST, savePDF } from '@/utils/pdf';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -349,7 +349,7 @@ export async function POST(
       // Generate PDF
       let pdfUrl = '';
       try {
-        const pdfBuffer = await generateInvoicePDF(
+        const pdfBuffer = await generateInvoicePDFWithGST(
           invoice,
           settings,
           userDoc.name,
@@ -383,6 +383,46 @@ export async function POST(
       }
       
       // Save updated invoice
+      // Ensure tax fields exist (handle invoices created before tax fields were required)
+      try {
+        const lineItems = invoice.lineItems || [];
+        const subtotal = Array.isArray(lineItems)
+          ? lineItems.reduce((s: number, it: any) => s + (it.total || 0), 0)
+          : 0;
+
+        const taxType = invoice.taxType || 'IGST';
+        let igst = invoice.igst ?? 0;
+        let cgst = invoice.cgst ?? 0;
+        let sgst = invoice.sgst ?? 0;
+        let totalTax = invoice.totalTax ?? 0;
+
+        // Recalculate if missing or zero
+        if (!totalTax) {
+          if (taxType === 'IGST') {
+            igst = subtotal * 0.18;
+            cgst = 0;
+            sgst = 0;
+            totalTax = igst;
+          } else {
+            cgst = subtotal * 0.09;
+            sgst = subtotal * 0.09;
+            igst = 0;
+            totalTax = cgst + sgst;
+          }
+        }
+
+        invoice.subtotal = subtotal;
+        invoice.taxType = taxType;
+        invoice.igst = igst;
+        invoice.cgst = cgst;
+        invoice.sgst = sgst;
+        invoice.totalTax = totalTax;
+        invoice.discount = invoice.discount || 0;
+        invoice.grandTotal = (subtotal || 0) + (totalTax || 0) - (invoice.discount || 0);
+      } catch (calcErr) {
+        console.warn('Failed to recalculate tax fields for invoice before save:', calcErr);
+      }
+
       await invoice.save();
       
       // Log successful signing

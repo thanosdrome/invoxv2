@@ -25,7 +25,7 @@ export async function GET(
     await dbConnect();
     const user = getUserFromToken(req);
     
-    // Await the params promise first
+        // Await the params promise first
     const { id } = await params;
     
     const invoice = await Invoice.findById(id)
@@ -51,14 +51,16 @@ export async function GET(
 // PUT - Update invoice
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Add Promise wrapper
 ) {
   try {
     await dbConnect();
     const user = getUserFromToken(req);
     const body = await req.json();
     
-    const invoice = await Invoice.findById(params.id);
+    const { id } = await params;
+
+    const invoice = await Invoice.findById(id);
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
@@ -78,13 +80,13 @@ export async function PUT(
       body.grandTotal = subtotal + (body.tax || 0) - (body.discount || 0);
     }
     
-    const updated = await Invoice.findByIdAndUpdate(params.id, body, { new: true });
+    const updated = await Invoice.findByIdAndUpdate(id, body, { new: true });
     
     await createLog({
       userId: user.userId,
       action: LogActions.INVOICE_UPDATED,
       entity: 'invoice',
-      entityId: params.id,
+      entityId: id,
       description: `Invoice updated: ${updated.invoiceNumber}`,
       ipAddress: req.headers.get('x-forwarded-for') || "unknown",
     });

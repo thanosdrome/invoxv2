@@ -1,5 +1,6 @@
 // ====================================
-// models/User.ts
+// models/User.ts - UPDATED
+// Add signature image URL to User
 // ====================================
 import mongoose, { Schema, Document } from 'mongoose';
 
@@ -14,7 +15,7 @@ export interface IUser extends Document {
     counter: number;
     transports?: string[];
   };
-  signatureImageUrl?: string;
+  signatureImageUrl?: string; // Digital signature image
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,7 +32,7 @@ const UserSchema = new Schema<IUser>(
       counter: Number,
       transports: [String],
     },
-    signatureImageUrl: String,
+    signatureImageUrl: String, // Store uploaded signature image path
   },
   { timestamps: true }
 );

@@ -1,5 +1,6 @@
-// components/invoice-form.tsx
-// Reusable Invoice Form Component
+// ====================================
+// components/invoice-form.tsx - UPDATED
+// Enhanced Form with GST Features
 // ====================================
 'use client';
 
@@ -8,21 +9,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
 export interface LineItem {
   description: string;
+  hsnCode: string;
   quantity: number;
   rate: number;
   total: number;
 }
 
 export interface InvoiceFormData {
+  invoiceNumber: string;
+  orderReferenceNumber?: string;
   clientName: string;
   clientEmail: string;
   clientAddress: string;
+  clientGSTNumber?: string;
   lineItems: LineItem[];
-  tax: number;
+  taxType: 'IGST' | 'CGST_SGST';
   discount: number;
 }
 
@@ -34,7 +40,7 @@ interface InvoiceFormProps {
   isEdit?: boolean;
 }
 
-export default function InvoiceForm({
+export default function InvoiceFormEnhanced({
   initialData,
   onSubmit,
   onCancel,
@@ -43,13 +49,16 @@ export default function InvoiceForm({
 }: InvoiceFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<InvoiceFormData>({
+    invoiceNumber: initialData?.invoiceNumber || '',
+    orderReferenceNumber: initialData?.orderReferenceNumber || '',
     clientName: initialData?.clientName || '',
     clientEmail: initialData?.clientEmail || '',
     clientAddress: initialData?.clientAddress || '',
+    clientGSTNumber: initialData?.clientGSTNumber || '',
     lineItems: initialData?.lineItems || [
-      { description: '', quantity: 1, rate: 0, total: 0 },
+      { description: '', hsnCode: '', quantity: 1, rate: 0, total: 0 },
     ],
-    tax: initialData?.tax || 0,
+    taxType: initialData?.taxType || 'IGST',
     discount: initialData?.discount || 0,
   });
 
@@ -58,7 +67,7 @@ export default function InvoiceForm({
       ...formData,
       lineItems: [
         ...formData.lineItems,
-        { description: '', quantity: 1, rate: 0, total: 0 },
+        { description: '', hsnCode: '', quantity: 1, rate: 0, total: 0 },
       ],
     });
   };
@@ -76,7 +85,6 @@ export default function InvoiceForm({
     const items = [...formData.lineItems];
     items[index] = { ...items[index], [field]: value };
 
-    // Auto-calculate total when quantity or rate changes
     if (field === 'quantity' || field === 'rate') {
       items[index].total = items[index].quantity * items[index].rate;
     }
@@ -88,17 +96,36 @@ export default function InvoiceForm({
     return formData.lineItems.reduce((sum, item) => sum + item.total, 0);
   };
 
+  const calculateTax = (): { igst: number; cgst: number; sgst: number; total: number } => {
+    const subtotal = calculateSubtotal();
+    
+    if (formData.taxType === 'IGST') {
+      const igst = subtotal * 0.18; // 18% IGST
+      return { igst, cgst: 0, sgst: 0, total: igst };
+    } else {
+      const cgst = subtotal * 0.09; // 9% CGST
+      const sgst = subtotal * 0.09; // 9% SGST
+      return { igst: 0, cgst, sgst, total: cgst + sgst };
+    }
+  };
+
   const calculateGrandTotal = (): number => {
     const subtotal = calculateSubtotal();
-    return subtotal + formData.tax - formData.discount;
+    const tax = calculateTax();
+    return subtotal + tax.total - formData.discount;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
-    if (formData.lineItems.some((item) => !item.description || item.quantity <= 0 || item.rate < 0)) {
-      alert('Please fill in all line items with valid values');
+    // if (!formData.invoiceNumber) {
+    //   alert('Invoice number is required');
+    //   return;
+    // }
+
+    if (formData.lineItems.some((item) => !item.description || !item.hsnCode || item.quantity <= 0)) {
+      alert('Please fill in all line items with valid values including HSN codes');
       return;
     }
 
@@ -112,8 +139,54 @@ export default function InvoiceForm({
     }
   };
 
+  const tax = calculateTax();
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Invoice Details */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Invoice Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="invoiceNumber">
+                Invoice Number <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="invoiceNumber"
+                placeholder={initialData?.invoiceNumber}
+                value={initialData?.invoiceNumber}
+                onChange={(e) =>
+                  setFormData({ ...formData, invoiceNumber: e.target.value })
+                }
+                required
+                disabled={loading || isEdit}
+              />
+              {isEdit && (
+                <p className="text-xs text-muted-foreground">
+                  Invoice number cannot be changed after creation
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="orderReference">Order/PO Reference</Label>
+              <Input
+                id="orderReference"
+                placeholder="PO-2024-123"
+                value={formData.orderReferenceNumber}
+                onChange={(e) =>
+                  setFormData({ ...formData, orderReferenceNumber: e.target.value })
+                }
+                disabled={loading}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Client Information */}
       <Card>
         <CardHeader>
@@ -170,10 +243,27 @@ export default function InvoiceForm({
               disabled={loading}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="clientGST">Client GST Number</Label>
+            <Input
+              id="clientGST"
+              placeholder="22AAAAA0000A1Z5"
+              value={formData.clientGSTNumber}
+              onChange={(e) =>
+                setFormData({ ...formData, clientGSTNumber: e.target.value.toUpperCase() })
+              }
+              disabled={loading}
+              maxLength={15}
+            />
+            <p className="text-xs text-muted-foreground">
+              15-character GST Identification Number (optional)
+            </p>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Line Items */}
+      {/* Line Items with HSN */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>Line Items</CardTitle>
@@ -189,12 +279,13 @@ export default function InvoiceForm({
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Header Row (Desktop) */}
-          <div className="hidden md:grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground pb-2 border-b">
-            <div className="col-span-5">Description</div>
+          {/* Header Row */}
+          <div className="hidden lg:grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground pb-2 border-b">
+            <div className="col-span-4">Description</div>
+            <div className="col-span-2">HSN/SAC Code</div>
             <div className="col-span-2 text-right">Quantity</div>
-            <div className="col-span-2 text-right">Rate ($)</div>
-            <div className="col-span-2 text-right">Total ($)</div>
+            <div className="col-span-2 text-right">Rate (₹)</div>
+            <div className="col-span-1 text-right">Total (₹)</div>
             <div className="col-span-1"></div>
           </div>
 
@@ -202,12 +293,12 @@ export default function InvoiceForm({
           {formData.lineItems.map((item, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end pb-4 border-b md:border-0"
+              className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end pb-4 border-b lg:border-0"
             >
-              <div className="md:col-span-5 space-y-2">
-                <Label className="md:hidden">Description</Label>
+              <div className="lg:col-span-4 space-y-2">
+                <Label className="lg:hidden">Description</Label>
                 <Input
-                  placeholder="Web design services"
+                  placeholder="Product/Service description"
                   value={item.description}
                   onChange={(e) =>
                     updateLineItem(index, 'description', e.target.value)
@@ -217,8 +308,21 @@ export default function InvoiceForm({
                 />
               </div>
 
-              <div className="md:col-span-2 space-y-2">
-                <Label className="md:hidden">Quantity</Label>
+              <div className="lg:col-span-2 space-y-2">
+                <Label className="lg:hidden">HSN/SAC Code</Label>
+                <Input
+                  placeholder="9954"
+                  value={item.hsnCode}
+                  onChange={(e) =>
+                    updateLineItem(index, 'hsnCode', e.target.value)
+                  }
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="lg:col-span-2 space-y-2">
+                <Label className="lg:hidden">Quantity</Label>
                 <Input
                   type="number"
                   min="1"
@@ -230,12 +334,12 @@ export default function InvoiceForm({
                   }
                   required
                   disabled={loading}
-                  className="md:text-right"
+                  className="lg:text-right"
                 />
               </div>
 
-              <div className="md:col-span-2 space-y-2">
-                <Label className="md:hidden">Rate ($)</Label>
+              <div className="lg:col-span-2 space-y-2">
+                <Label className="lg:hidden">Rate (₹)</Label>
                 <Input
                   type="number"
                   min="0"
@@ -247,20 +351,20 @@ export default function InvoiceForm({
                   }
                   required
                   disabled={loading}
-                  className="md:text-right"
+                  className="lg:text-right"
                 />
               </div>
 
-              <div className="md:col-span-2 space-y-2">
-                <Label className="md:hidden">Total ($)</Label>
+              <div className="lg:col-span-1 space-y-2">
+                <Label className="lg:hidden">Total (₹)</Label>
                 <Input
                   value={item.total.toFixed(2)}
                   disabled
-                  className="bg-muted md:text-right font-medium"
+                  className="bg-muted lg:text-right font-medium"
                 />
               </div>
 
-              <div className="md:col-span-1 flex md:justify-end">
+              <div className="lg:col-span-1 flex lg:justify-end">
                 <Button
                   type="button"
                   variant="ghost"
@@ -277,34 +381,41 @@ export default function InvoiceForm({
         </CardContent>
       </Card>
 
-      {/* Totals */}
+      {/* Tax Calculation */}
       <Card>
         <CardHeader>
-          <CardTitle>Calculations</CardTitle>
+          <CardTitle>Tax & Totals</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          {/* Tax Type Selection */}
+          <div className="space-y-3">
+            <Label>Tax Type <span className="text-red-500">*</span></Label>
+            <RadioGroup
+              value={formData.taxType}
+              onValueChange={(value: 'IGST' | 'CGST_SGST') =>
+                setFormData({ ...formData, taxType: value })
+              }
+              disabled={loading}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="IGST" id="igst" />
+                <Label htmlFor="igst" className="font-normal cursor-pointer">
+                  IGST @ 18% (Inter-state supply)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="CGST_SGST" id="cgst_sgst" />
+                <Label htmlFor="cgst_sgst" className="font-normal cursor-pointer">
+                  CGST @ 9% + SGST @ 9% (Intra-state supply)
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* Discount */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tax">Tax ($)</Label>
-              <Input
-                id="tax"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={formData.tax}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    tax: parseFloat(e.target.value) || 0,
-                  })
-                }
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="discount">Discount ($)</Label>
+              <Label htmlFor="discount">Discount (₹)</Label>
               <Input
                 id="discount"
                 type="number"
@@ -323,22 +434,44 @@ export default function InvoiceForm({
             </div>
           </div>
 
+          {/* Totals Breakdown */}
           <div className="border-t pt-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
+              <span className="font-medium">₹{calculateSubtotal().toFixed(2)}</span>
             </div>
+
+            {formData.taxType === 'IGST' ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">IGST @ 18%:</span>
+                <span className="font-medium">+₹{tax.igst.toFixed(2)}</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">CGST @ 9%:</span>
+                  <span className="font-medium">+₹{tax.cgst.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">SGST @ 9%:</span>
+                  <span className="font-medium">+₹{tax.sgst.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax:</span>
-              <span className="font-medium">+${formData.tax.toFixed(2)}</span>
+              <span className="text-muted-foreground">Total Tax:</span>
+              <span className="font-medium">+₹{tax.total.toFixed(2)}</span>
             </div>
+
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Discount:</span>
-              <span className="font-medium">-${formData.discount.toFixed(2)}</span>
+              <span className="font-medium">-₹{formData.discount.toFixed(2)}</span>
             </div>
+
             <div className="flex justify-between text-lg font-bold pt-2 border-t">
               <span>Grand Total:</span>
-              <span className="text-primary">${calculateGrandTotal().toFixed(2)}</span>
+              <span className="text-primary">₹{calculateGrandTotal().toFixed(2)}</span>
             </div>
           </div>
         </CardContent>

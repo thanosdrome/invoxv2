@@ -106,11 +106,12 @@ export default function EditInvoicePage() {
 
       <InvoiceForm
         initialData={{
+          invoiceNumber:invoice.invoiceNumber,
           clientName: invoice.clientName,
           clientEmail: invoice.clientEmail,
           clientAddress: invoice.clientAddress,
           lineItems: invoice.lineItems,
-          tax: invoice.tax,
+          taxType: invoice.tax,
           discount: invoice.discount,
         }}
         onSubmit={handleSubmit}

@@ -1,6 +1,6 @@
 // ====================================
-// app/(dashboard)/profile/page.tsx
-// User Profile Page
+// app/(dashboard)/profile/page.tsx - UPDATED
+// Add Signature Upload to Profile
 // ====================================
 'use client';
 
@@ -11,13 +11,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import SignatureUpload from '@/components/signature-upload';
 import { Loader2, Save, AlertCircle, CheckCircle, Shield, User } from 'lucide-react';
 
-export default function ProfilePage() {
+export default function ProfilePageWithSignature() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,6 +30,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
+    fetchSignature();
   }, []);
 
   const fetchProfile = async () => {
@@ -49,6 +52,19 @@ export default function ProfilePage() {
       console.error('Failed to fetch profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSignature = async () => {
+    try {
+      const res = await fetch('/api/user/signature');
+      const data = await res.json();
+      
+      if (res.ok) {
+        setSignatureUrl(data.signatureUrl);
+      }
+    } catch (error) {
+      console.error('Failed to fetch signature:', error);
     }
   };
 
@@ -118,6 +134,12 @@ export default function ProfilePage() {
     }
   };
 
+
+  const handleSignatureUpload = (url: string) => {
+    setSignatureUrl(url);
+    setMessage({ type: 'success', text: 'Signature uploaded successfully!' });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -180,7 +202,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Profile Edit Form */}
+ {/* Profile Edit Form */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
@@ -290,6 +312,13 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+
+      {/* Digital Signature Upload */}
+      <SignatureUpload
+        currentSignatureUrl={signatureUrl}
+        onUploadSuccess={handleSignatureUpload}
+      />
 
       {/* WebAuthn Status Card */}
       <Card>
