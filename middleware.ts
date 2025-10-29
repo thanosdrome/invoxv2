@@ -1,6 +1,8 @@
 // ====================================
 // middleware.ts - FIXED VERSION
 // Properly protects both pages and API routes
+// middleware.ts - FIXED VERSION
+// Properly protects both pages and API routes
 // ====================================
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -48,6 +50,19 @@ export async function middleware(request: NextRequest) {
     }
     return NextResponse.next();
   }
+  
+  // === 3. PROTECT: All dashboard pages ===
+  const protectedPagePaths = [
+    '/dashboard',
+    '/invoices',
+    '/settings',
+    '/profile',
+    '/logs',
+    '/diagnostics',
+  ];
+  
+  const isProtectedPage = protectedPagePaths.some(path => 
+    pathname === path || pathname.startsWith(path + '/')
   
   // === 3. PROTECT: All dashboard pages ===
   const protectedPagePaths = [
@@ -155,7 +170,17 @@ export async function middleware(request: NextRequest) {
 }
 
 // Configure matcher to run on all routes except static files
+// Configure matcher to run on all routes except static files
 export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
   matcher: [
     /*
      * Match all request paths except:

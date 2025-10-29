@@ -3,19 +3,9 @@
 // Landing Page / Home Page
 // ====================================
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
-  FileText,
-  Shield,
-  Zap,
-  CheckCircle,
   Fingerprint,
-  Lock,
-  Download,
-  Users,
-  TrendingUp,
-  ArrowRight,
+  ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
 
