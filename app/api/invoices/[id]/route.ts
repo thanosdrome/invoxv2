@@ -100,13 +100,15 @@ export async function PUT(
 // DELETE - Delete invoice
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await dbConnect();
     const user = getUserFromToken(req);
     
-    const invoice = await Invoice.findById(params.id);
+    const { id } = await params;
+
+    const invoice = await Invoice.findById(id);
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
@@ -115,13 +117,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    await Invoice.findByIdAndDelete(params.id);
+    await Invoice.findByIdAndDelete(id);
     
     await createLog({
       userId: user.userId,
       action: LogActions.INVOICE_DELETED,
       entity: 'invoice',
-      entityId: params.id,
+      entityId: id,
       description: `Invoice deleted: ${invoice.invoiceNumber}`,
       ipAddress: req.headers.get('x-forwarded-for') || "unknown",
     });
