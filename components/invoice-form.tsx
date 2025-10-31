@@ -112,7 +112,7 @@ export default function InvoiceFormEnhanced({
   const calculateGrandTotal = (): number => {
     const subtotal = calculateSubtotal();
     const tax = calculateTax();
-    return subtotal + tax.total - formData.discount;
+    return subtotal + tax.total ;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -308,18 +308,23 @@ export default function InvoiceFormEnhanced({
                 />
               </div>
 
-              <div className="lg:col-span-2 space-y-2">
+                <div className="lg:col-span-2 space-y-0">
                 <Label className="lg:hidden">HSN/SAC Code</Label>
                 <Input
+                  list={`hsn-options-${index}`}
                   placeholder="9954"
                   value={item.hsnCode}
                   onChange={(e) =>
-                    updateLineItem(index, 'hsnCode', e.target.value)
+                  updateLineItem(index, 'hsnCode', e.target.value)
                   }
                   required
                   disabled={loading}
                 />
-              </div>
+                <datalist id={`hsn-options-${index}`}>
+                  <option value="998313" />
+                  <option value="852380" />
+                </datalist>
+                </div>
 
               <div className="lg:col-span-2 space-y-2">
                 <Label className="lg:hidden">Quantity</Label>
@@ -413,7 +418,7 @@ export default function InvoiceFormEnhanced({
           </div>
 
           {/* Discount */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="discount">Discount (₹)</Label>
               <Input
@@ -432,7 +437,7 @@ export default function InvoiceFormEnhanced({
                 disabled={loading}
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Totals Breakdown */}
           <div className="border-t pt-4 space-y-2">
@@ -464,10 +469,6 @@ export default function InvoiceFormEnhanced({
               <span className="font-medium">+₹{tax.total.toFixed(2)}</span>
             </div>
 
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Discount:</span>
-              <span className="font-medium">-₹{formData.discount.toFixed(2)}</span>
-            </div>
 
             <div className="flex justify-between text-lg font-bold pt-2 border-t">
               <span>Grand Total:</span>

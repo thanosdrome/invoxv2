@@ -90,7 +90,7 @@ export default function DashboardPage() {
 
         <Card className='shadow-sm'>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Signature Rate</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
                           : 'bg-yellow-100 text-yellow-800'
                       }`}
                     >
-                      {invoice.status}
+                      {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                     </span>
                   </div>
                 </div>

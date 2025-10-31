@@ -256,7 +256,7 @@ export default function InvoiceDetailPageWithActions() {
               <Button variant="outline" onClick={() => window.open(invoice.pdfUrl, '_blank')}>
                 View PDF
               </Button>
-              <Button onClick={handleDownloadPDF}>
+              <Button variant="outline" onClick={handleDownloadPDF}>
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
