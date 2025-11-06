@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <body style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", margin: 0, background: "#ffffff", color: "#0f172a" }}>
                 <div style={{ margin: "0 auto", padding: 20 }}>
 
-                    <main style={{ background: "#fff" }}>
+                    <main style={{ background: "#ffffff" }}>
                         {children}
                     </main>
                 </div>

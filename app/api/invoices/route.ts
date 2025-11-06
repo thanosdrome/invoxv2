@@ -2,13 +2,11 @@
 // Create Invoice with GST Features
 // ====================================
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import dbConnect from '@/lib/db';
 import Invoice from '@/models/Invoice';
 import { createLog, LogActions } from '@/utils/logger';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+import { validateToken, createAuthErrorResponse } from '@/lib/auth';
 
 const lineItemSchema = z.object({
   description: z.string(),
@@ -30,20 +28,14 @@ const createInvoiceSchema = z.object({
   discount: z.number().optional(),
 });
 
-function getUserFromToken(req: NextRequest) {
-  const token = req.cookies.get('auth-token')?.value;
-  if (!token) throw new Error('Unauthorized');
-  
-  const decoded = jwt.verify(token, JWT_SECRET) as any;
-  return decoded;
-}
+
 
 // POST - Create invoice
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
     
-    const user = getUserFromToken(req);
+    const user = await validateToken(req);
     const body = await req.json();
     const data = createInvoiceSchema.parse(body);
     
@@ -106,13 +98,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error: any) {
     console.error('Create invoice error:', error);
+    
+    // Handle validation errors
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid input', details: error.errors },
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    
+    // Handle authentication/authorization errors
+    if (error.message.includes('token')) {
+      return createAuthErrorResponse(error.message);
+    }
+    
+    // Handle other errors
+    return NextResponse.json(
+      { error: 'Internal server error', details: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -121,7 +125,7 @@ export async function GET(req: NextRequest) {
   try {
     await dbConnect();
     
-    const user = getUserFromToken(req);
+    const user = await validateToken(req);
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
     
@@ -133,16 +137,36 @@ export async function GET(req: NextRequest) {
       query.status = status;
     }
     
-    const invoices = await Invoice.find(query)
-      .populate('createdBy', 'name email')
-      .populate('signedBy', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
-    
-    return NextResponse.json({ invoices });
-  } catch (error) {
-    console.error('Get invoices error:', error);
-      return NextResponse.json({ error }, { status: 400 });
+    try {
+      const invoices = await Invoice.find(query)
+        .populate('createdBy', 'name email')
+        .populate('signedBy', 'name email')
+        .sort({ createdAt: -1 })
+        .lean();
+      
+      if (!invoices || invoices.length === 0) {
+        // Return empty array instead of null/undefined
+        return NextResponse.json({ invoices: [] });
+      }
+      
+      return NextResponse.json({ invoices });
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      throw new Error('Failed to fetch invoices');
     }
+  } catch (error: any) {
+    console.error('Get invoices error:', error);
+    
+    // Handle authentication/authorization errors
+    if (error.message.includes('token')) {
+      return createAuthErrorResponse(error.message);
+    }
+    
+    // Handle other errors
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
+}
 

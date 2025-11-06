@@ -9,6 +9,30 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('auth-token')?.value;
   
+  // Early token validation for all protected routes (except validation endpoint)
+  if (token && pathname !== '/api/auth/validate') {
+    try {
+      const validateUrl = new URL('/api/auth/validate', request.url).toString();
+      const resp = await fetch(validateUrl, { 
+        headers: { cookie: request.headers.get('cookie') || '' }
+      });
+      if (!resp.ok) {
+        // Clear invalid token
+        const res = NextResponse.redirect(new URL('/login', request.url));
+        res.cookies.set('auth-token', '', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 0,
+        });
+        return res;
+      }
+    } catch (err) {
+      console.error('Early token validation failed:', err);
+    }
+  }
+  
   // === 1. ALLOW: Static assets and Next.js internals ===
   if (
     pathname.startsWith('/_next') ||
@@ -64,6 +88,7 @@ export async function middleware(request: NextRequest) {
   );
   
   if (isProtectedPage) {
+    
     if (!token) {
       console.log('🔒 Blocked page access:', pathname, '- No token');
       const loginUrl = new URL('/login', request.url);
