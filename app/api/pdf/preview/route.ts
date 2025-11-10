@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 // NOTE: we'll dynamically import the utils/pdf module inside the handler to avoid
 // any build-time import issues in edge/route contexts.
-import path from 'path';
-import fs from 'fs';
-
-// Import alternative template if requested
-let generateTaxInvoice: ((invoice: any, settings: any) => Promise<Uint8Array>) | null = null;
-try {
-  // taxInvoiceTemplate lives in public/pdfs in this repo
-  // import dynamically so this file still works if the template is absent
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  // @ts-ignore
-  generateTaxInvoice = require(path.join(process.cwd(), 'public', 'pdfs', 'taxInvoiceTemplate.ts')).generateTaxInvoice;
-} catch (e) {
-  generateTaxInvoice = null;
-}
+import { generateTaxInvoice } from '@/utils/taxInvoiceTemplate';
 
 export async function GET(req: NextRequest) {
   try {

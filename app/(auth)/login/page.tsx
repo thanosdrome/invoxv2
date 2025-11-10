@@ -1,10 +1,6 @@
 // ====================================
-// app/(auth)/login/page.tsx
-// Login Page with WebAuthn Authentication
-// ====================================
-'use client';
-
-import { useState, useEffect } from 'react';
+"use client";
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -33,7 +29,7 @@ import Image from 'next/image';
 
 type LoginStep = 'email' | 'webauthn' | 'success' | 'error';
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<LoginStep>('email');
@@ -43,15 +39,12 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!email) {
       setError('Please enter your email address');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
       // Step 1: Get WebAuthn challenge
       const initRes = await fetch('/api/auth/login', {
@@ -60,15 +53,11 @@ export default function LoginPage() {
         body: JSON.stringify({ step: 'init', email }),
         credentials: 'same-origin',
       });
-
       const initData = await initRes.json();
-
       if (!initRes.ok) {
         throw new Error(initData.error || 'Login failed');
       }
-
       setStep('webauthn');
-
       // Step 2: WebAuthn authentication
       let credential;
       try {
@@ -78,7 +67,6 @@ export default function LoginPage() {
           'WebAuthn authentication failed. Please try again or check your security key.'
         );
       }
-
       // Step 3: Verify credential
       const verifyRes = await fetch('/api/auth/login', {
         method: 'POST',
@@ -90,21 +78,14 @@ export default function LoginPage() {
         }),
         credentials: 'same-origin',
       });
-
       const verifyData = await verifyRes.json();
-
       if (!verifyRes.ok) {
         throw new Error(verifyData.error || 'Verification failed');
       }
-
-      // Success!
       setStep('success');
-      
-      // Redirect to dashboard after a brief delay
       setTimeout(() => {
         router.push('/dashboard');
       }, 1500);
-      
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Login failed. Please try again.');
@@ -113,35 +94,26 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
   const handleReset = () => {
     setStep('email');
     setError('');
     setEmail('');
   };
-
-  // Clear stale/invalid cookie when middleware redirected with ?clear=1
   useEffect(() => {
     try {
       const shouldClear = searchParams?.get('clear') === '1';
       if (shouldClear) {
-        // call logout endpoint to ensure cookie is cleared server-side
         fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
           .then(() => {
-            // optionally we could show a notice to the user, but keep it silent
             console.log('Cleared stale auth cookie');
           })
           .catch((err) => console.error('Failed to clear cookie:', err));
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }, [searchParams]);
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo/Header */}
         <div className="text-center">
           <div className="flex justify-center mb-4">
             <div className="rounded-full bg-primary/10 p-3">
@@ -149,8 +121,6 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-
-        {/* Login Card */}
         <Card className="shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
@@ -161,9 +131,7 @@ export default function LoginPage() {
               {step === 'error' && 'Login failed'}
             </CardDescription>
           </CardHeader>
-
           <CardContent>
-            {/* Email Step */}
             {step === 'email' && (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -180,14 +148,12 @@ export default function LoginPage() {
                     className="h-11"
                   />
                 </div>
-
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-
                 <Button type="submit" className="w-full h-11 bg-[#0070b2] text-white cursor-pointer" disabled={loading}>
                   {loading ? (
                     <>
@@ -201,11 +167,8 @@ export default function LoginPage() {
                     </>
                   )}
                 </Button>
-
               </form>
             )}
-
-            {/* WebAuthn Step */}
             {step === 'webauthn' && (
               <div className="space-y-6 py-4">
                 <div className="flex justify-center">
@@ -213,18 +176,15 @@ export default function LoginPage() {
                     <Fingerprint className="h-16 w-16 text-primary animate-pulse" />
                   </div>
                 </div>
-
                 <div className="text-center space-y-2">
                   <h3 className="text-lg font-semibold">Authenticate with WebAuthn</h3>
                   <p className="text-sm text-muted-foreground">
                     Use your security key, fingerprint, or Face ID to login
                   </p>
                 </div>
-
                 <div className="flex justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-
                 <Alert>
                   <Shield className="h-4 w-4" />
                   <AlertDescription className="text-xs">
@@ -232,7 +192,6 @@ export default function LoginPage() {
                     This may include inserting your security key or using biometric authentication.
                   </AlertDescription>
                 </Alert>
-
                 <Button
                   variant="outline"
                   className="w-full"
@@ -243,8 +202,6 @@ export default function LoginPage() {
                 </Button>
               </div>
             )}
-
-            {/* Success Step */}
             {step === 'success' && (
               <div className="space-y-6 py-4">
                 <div className="flex justify-center">
@@ -252,7 +209,6 @@ export default function LoginPage() {
                     <CheckCircle2 className="h-16 w-16 text-green-600" />
                   </div>
                 </div>
-
                 <div className="text-center space-y-2">
                   <h3 className="text-lg font-semibold text-green-900">
                     Login Successful!
@@ -261,21 +217,17 @@ export default function LoginPage() {
                     Redirecting to your dashboard...
                   </p>
                 </div>
-
                 <div className="flex justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-green-600" />
                 </div>
               </div>
             )}
-
-            {/* Error Step */}
             {step === 'error' && (
               <div className="space-y-4">
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
-
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-medium">Troubleshooting tips:</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
@@ -285,7 +237,6 @@ export default function LoginPage() {
                     <li>Try a different browser if the issue persists</li>
                   </ul>
                 </div>
-
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -304,7 +255,6 @@ export default function LoginPage() {
               </div>
             )}
           </CardContent>
-
           <CardFooter className="flex flex-col space-y-4">
             {step === 'email' && (
               <>
@@ -317,13 +267,19 @@ export default function LoginPage() {
                     Register
                   </Link>
                 </div>
-
               </>
             )}
           </CardFooter>
         </Card>
-
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }

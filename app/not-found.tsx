@@ -2,6 +2,7 @@
 // app/not-found.tsx
 // 404 Error Page
 // ====================================
+'use client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { FileQuestion, Home, ArrowLeft } from 'lucide-react';

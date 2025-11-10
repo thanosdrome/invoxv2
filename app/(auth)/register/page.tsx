@@ -23,6 +23,7 @@ export default function RegisterPage() {
     password: '',
     role: 'user',
   });
+  const [initData, setInitData] = useState<any>(null); // Store init response data
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,20 +44,23 @@ export default function RegisterPage() {
         throw new Error(initData.error || 'Registration failed');
       }
 
+      // Store the init data for the verify step
+      setInitData(initData);
       setStep('webauthn');
 
       // Step 2: WebAuthn registration
       const credential = await registerWebAuthn(initData.options);
 
-      // Step 3: Verify credential
+      // Step 3: Verify credential - FIXED: Use tempId and include pendingRegistration
       const verifyRes = await fetch('/api/auth/register', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           step: 'verify',
-          userId: initData.userId,
+          tempId: initData.tempId, // Use tempId instead of userId
           credential,
+          pendingRegistration: initData.pendingRegistration // Include this!
         }),
       });
 
@@ -79,16 +83,15 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
-
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-                        <div className="text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="rounded-full bg-primary/10 p-3">
-                    <Image src="/logo.svg" alt="KIPL Logo" width={250} height={40} />
-                  </div>
-                </div>
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full bg-primary/10 p-3">
+                <Image src="/logo.svg" alt="KIPL Logo" width={250} height={40} />
               </div>
+            </div>
+          </div>
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
             Enter your details and setup WebAuthn for secure access

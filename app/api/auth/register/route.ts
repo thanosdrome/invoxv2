@@ -9,6 +9,19 @@ import User from '@/models/User';
 import { createLog, LogActions } from '@/utils/logger';
 import { generateRegistrationChallenge, verifyRegistration } from '@/lib/webauthn';
 
+// Define the proper WebAuthn types
+type AuthenticatorTransportFuture = 
+  | 'usb' 
+  | 'nfc' 
+  | 'ble' 
+  | 'smart-card' 
+  | 'hybrid' 
+  | 'internal';
+
+type AuthenticatorAttachment =
+  | 'platform'
+  | 'cross-platform';
+
 const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
@@ -16,9 +29,27 @@ const registerSchema = z.object({
   role: z.enum(['admin', 'user']).optional(),
 });
 
+// Fixed verifySchema with all proper types
 const verifySchema = z.object({
-  userId: z.string(),
-  credential: z.any(),
+  tempId: z.string().min(1, "Temporary ID is required"),
+  credential: z.object({
+    id: z.string(),
+    rawId: z.string(),
+    type: z.literal("public-key"),
+    response: z.object({
+      clientDataJSON: z.string(),
+      attestationObject: z.string(),
+      transports: z.array(z.enum(['usb', 'nfc', 'ble', 'smart-card', 'hybrid', 'internal'])).optional(),
+    }),
+    clientExtensionResults: z.object({}).optional(),
+    authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
+  }),
+  pendingRegistration: z.object({
+    name: z.string(),
+    email: z.string().email(),
+    passwordHash: z.string(),
+    role: z.enum(['admin', 'user']).optional(),
+  }),
 });
 
 export async function POST(req: NextRequest) {
@@ -28,6 +59,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { step } = body;
     
+    console.log('Registration request:', { step, body: JSON.stringify(body, null, 2) });
+
     // Step 1: Create user and generate WebAuthn challenge
     if (step === 'init') {
       const { name, email, password, role } = registerSchema.parse(body);
@@ -39,36 +72,73 @@ export async function POST(req: NextRequest) {
       
       const passwordHash = await bcrypt.hash(password, 10);
       
-      const user = await User.create({
-        name,
-        email,
-        passwordHash,
-        role: role || 'user',
-      });
+      // Create a temporary user ID without storing in database yet
+      const tempId = new User()._id.toString(); // Use _id instead of id
       
+      // Generate WebAuthn challenge with temporary ID
       const options = await generateRegistrationChallenge(
-        user._id.toString(),
-        user.name,
-        user.email
+        tempId,
+        name,
+        email
       );
       
-      await createLog({
-        userId: user._id.toString(),
-        action: LogActions.REGISTER_SUCCESS,
-        entity: 'user',
-        entityId: user._id.toString(),
-        description: `User registered: ${email}`,
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+      // Store registration data in response without creating user yet
+      return NextResponse.json({ 
+        tempId,
+        options,
+        pendingRegistration: {
+          name,
+          email,
+          passwordHash,
+          role: role || 'user'
+        }
       });
-      
-      return NextResponse.json({ userId: user._id, options });
     }
     
-    // Step 2: Verify WebAuthn credential
+    // Step 2: Verify WebAuthn credential and create user
     if (step === 'verify') {
-      const { userId, credential } = verifySchema.parse(body);
+      console.log('Verify step - received body:', JSON.stringify(body, null, 2));
       
-      const verification = await verifyRegistration(userId, credential);
+      // Use safeParse for better error handling
+      const result = verifySchema.safeParse(body);
+      
+      if (!result.success) {
+        console.error('Validation error details:', {
+          errors: result.error.errors,
+          receivedBody: body
+        });
+        
+        return NextResponse.json(
+          { 
+            error: 'Invalid verification data',
+            details: result.error.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message
+            }))
+          },
+          { status: 400 }
+        );
+      }
+      
+      const { tempId, credential, pendingRegistration } = result.data;
+      
+      console.log('Parsed verification data:', { tempId, pendingRegistration });
+      
+      // Transform the credential to match the exact expected type
+      const transformedCredential = {
+        id: credential.id,
+        rawId: credential.rawId,
+        type: credential.type,
+        response: {
+          clientDataJSON: credential.response.clientDataJSON,
+          attestationObject: credential.response.attestationObject,
+          transports: credential.response.transports as AuthenticatorTransportFuture[] | undefined,
+        },
+        clientExtensionResults: credential.clientExtensionResults || {},
+        authenticatorAttachment: credential.authenticatorAttachment as AuthenticatorAttachment | undefined,
+      };
+      
+      const verification = await verifyRegistration(tempId, transformedCredential);
       
       if (!verification.verified) {
         return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
@@ -79,21 +149,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing registration info' }, { status: 400 });
       }
       
-      const user = await User.findByIdAndUpdate(
-        userId,
-        {
-          webAuthnCredential: {
-            credentialID: Buffer.from(regInfo.credentialID).toString('base64'),
-            credentialPublicKey: Buffer.from(regInfo.credentialPublicKey).toString('base64'),
-            counter: regInfo.counter,
-          },
-        },
-        { new: true }
-      );
+      // Only create user after successful WebAuthn verification
+      const user = await User.create({
+        ...pendingRegistration,
+        webAuthnCredential: {
+          credentialID: Buffer.from(regInfo.credentialID).toString('base64'),
+          credentialPublicKey: Buffer.from(regInfo.credentialPublicKey).toString('base64'),
+          counter: regInfo.counter,
+        }
+      });
       
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
+      await createLog({
+        userId: user._id.toString(),
+        action: LogActions.REGISTER_SUCCESS,
+        entity: 'user',
+        entityId: user._id.toString(),
+        description: `User registered: ${pendingRegistration.email}`,
+        ipAddress: req.headers.get('x-forwarded-for') || undefined,
+      });
       
       await createLog({
         userId: user._id.toString(),
@@ -101,7 +174,7 @@ export async function POST(req: NextRequest) {
         entity: 'user',
         entityId: user._id.toString(),
         description: 'WebAuthn credential registered',
-        ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+        ipAddress: req.headers.get('x-forwarded-for') || undefined,
       });
       
       return NextResponse.json({ success: true, user: { id: user._id, name: user.name, email: user.email } });

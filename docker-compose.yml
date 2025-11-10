@@ -9,7 +9,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - MONGODB_URI=mongodb://mongodb:27017/invoxv2
+      - MONGODB_URI=mongodb://cody:koplcody@172.16.4.148:27017/invox?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME}
@@ -30,7 +30,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      - MONGO_INITDB_DATABASE=invoxv2
+      - MONGO_INITDB_DATABASE=invox
     networks:
       - app_network
     restart: unless-stopped

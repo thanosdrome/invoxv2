@@ -2,6 +2,7 @@
 // app/page.tsx
 // Landing Page / Home Page
 // ====================================
+'use client';
 import { Button } from '@/components/ui/button';
 import {
   Fingerprint,

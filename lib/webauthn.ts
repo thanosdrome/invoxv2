@@ -41,7 +41,9 @@ export async function generateRegistrationChallenge(
     authenticatorSelection: {
       residentKey: 'preferred',
       userVerification: 'preferred',
+      authenticatorAttachment: 'platform', // Prefer platform authenticators like Touch ID
     },
+    supportedAlgorithmIDs: [-7, -257], // Support both ES256 and RS256
   });
 
   // Store challenge with 60s expiration

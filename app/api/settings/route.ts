@@ -82,7 +82,7 @@ export async function PUT(req: NextRequest) {
       entity: 'settings',
       entityId: settings._id.toString(),
       description: 'Company settings updated',
-      ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+      ipAddress: req.headers.get('x-forwarded-for') || undefined,
     });
     
     return NextResponse.json({ settings });

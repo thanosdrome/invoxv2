@@ -99,7 +99,7 @@ export async function PUT(req: NextRequest) {
       entity: 'user',
       entityId: user._id.toString(),
       description: 'User profile updated',
-      ipAddress: req.headers.get('x-forwarded-for') || req.ip,
+      ipAddress: req.headers.get('x-forwarded-for') || undefined,
     });
     
     return NextResponse.json({
